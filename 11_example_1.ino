@@ -10,7 +10,7 @@
 #define SND_VEL 346.0     // sound velocity at 24 celsius degree (unit: m/sec)
 #define INTERVAL 25      // sampling interval (unit: msec)
 #define PULSE_DURATION 10 // ultra-sound Pulse Duration (unit: usec)
-#define _DIST_MIN 180.0   // minimum distance to be measured (unit: mm)
+#define _DIST_MIN 100.0   // minimum distance to be measured (unit: mm)
 #define _DIST_MAX 360.0   // maximum distance to be measured (unit: mm)
 
 #define TIMEOUT ((INTERVAL / 2) * 1000.0) // maximum echo waiting time (unit: usec)
@@ -26,25 +26,25 @@
 // duty duration for myservo.writeMicroseconds()
 // NEEDS TUNING (servo by servo)
  
-#define _DUTY_MIN 500 // servo full clockwise position (0 degree)
-#define _DUTY_NEU 1500 // servo neutral position (90 degree)
-#define _DUTY_MAX 2300 // servo full counterclockwise position (180 degree)
+#define _DUTY_MIN 600 // servo full clockwise position (0 degree)
+#define _DUTY_NEU 1478 // servo neutral position (90 degree)
+#define _DUTY_MAX 2600 // servo full counterclockwise position (180 degree)
 
 // global variables
 float  dist_ema, dist_prev = _DIST_MAX; // unit: mm
-unsigned long last_sampling_time; // unit: ms
+unsigned long last_sampling_time;       // unit: ms
 
 Servo myservo;
 
 void setup() {
   // initialize GPIO pins
   pinMode(PIN_LED, OUTPUT);
-  pinMode(PIN_TRIG, OUTPUT);  // sonar TRIGGER
-  pinMode(PIN_ECHO, INPUT);   // sonar ECHO
+  pinMode(PIN_TRIG, OUTPUT);    // sonar TRIGGER
+  pinMode(PIN_ECHO, INPUT);     // sonar ECHO
   digitalWrite(PIN_TRIG, LOW);  // turn-off Sonar 
 
   myservo.attach(PIN_SERVO); 
-  myservo.writeMicroseconds(_DUTY_NEU);
+  
 
   // initialize USS related variables
   dist_prev = _DIST_MIN; // raw distance output from USS (unit: mm)
@@ -62,45 +62,42 @@ void loop() {
 
   dist_raw = USS_measure(PIN_TRIG, PIN_ECHO); // read distance
 
-  if (dist_raw < _DIST_MIN) {
-    dist_raw = dist_prev;           // cut lower than minimum
-    digitalWrite(PIN_LED, 1);       // LED OFF
-  } else if (dist_raw > _DIST_MAX) {
+  if ((dist_raw == 0.0) || (dist_raw > _DIST_MAX)) {
     dist_raw = dist_prev;           // Cut higher than maximum
     digitalWrite(PIN_LED, 1);       // LED OFF
+  } else if (dist_raw < _DIST_MIN) {
+    dist_raw = dist_prev;           // cut lower than minimum
+    digitalWrite(PIN_LED, 1);       // LED OFF
   } else {    // In desired Range
-    digitalWrite(PIN_LED, 0);       // LED ON      
     dist_prev = dist_raw;
+    digitalWrite(PIN_LED, 0);       // LED ON      
   }
 
   // Apply ema filter here  
   dist_ema = dist_raw;
 
   // adjust servo position according to the USS read value
-
   // add your code here!
-  // Use _TARGET_LOW, _TARGTE_HIGH
- if (dist_ema < _DIST_MIN) {
+  if (dist_ema < _DIST_MIN) {
     myservo.writeMicroseconds(500);       // LED OFF
-  } else if (dist_ema > _DIST_MAX) {
-    myservo.writeMicroseconds(2300);           // Cut higher than maximum
-  } else {    
-    myservo.writeMicroseconds(10.0*(dist_ema) - 1300);
+  } 
+  else if (dist_ema > _DIST_MAX) {
+    myservo.writeMicroseconds(_DUTY_MAX);           // Cut higher than maximum
+  } 
+  else {    
+    myservo.writeMicroseconds(10.0*(dist_ema) - 1150);
   }
-  
+
 
   // output the distance to the serial port
   Serial.print("Min:");    Serial.print(_DIST_MIN);
+  Serial.print(",Low:");   Serial.print(_TARGET_LOW);
   Serial.print(",dist:");  Serial.print(dist_raw);
-  Serial.print(",ema:");   Serial.print(dist_ema);
   Serial.print(",Servo:"); Serial.print(myservo.read());  
+  Serial.print(",High:");  Serial.print(_TARGET_HIGH);
   Serial.print(",Max:");   Serial.print(_DIST_MAX);
   Serial.println("");
-
-
-  dist_ema = (_EMA_ALPHA * dist_raw)+((1-_EMA_ALPHA)*dist_prev);
-  dist_prev = dist_raw;
-  
+ 
   // update last sampling time
   last_sampling_time += INTERVAL;
 }
@@ -113,15 +110,6 @@ float USS_measure(int TRIG, int ECHO)
   digitalWrite(TRIG, LOW);
   
   return pulseIn(ECHO, HIGH, TIMEOUT) * SCALE; // unit: mm
-
-  // Pulse duration to distance conversion example (target distance = 17.3m)
-  // - round trip distance: 34.6m
-  // - expected pulse duration: 0.1 sec, or 100,000us
-  // - pulseIn(ECHO, HIGH, timeout) * 0.001 * 0.5 * SND_VEL
-  //        = 100,000 micro*sec * 0.001 milli/micro * 0.5 * 346 meter/sec
-  //        = 100,000 * 0.001 * 0.5 * 346 * micro * sec * milli * meter
-  //                                        ----------------------------
-  //                                         micro * sec
-  //        = 100 * 173 milli*meter = 17,300 mm = 17.3m
-  // pulseIn() returns microseconds.
 }
+
+
